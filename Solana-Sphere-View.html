@@ -198,9 +198,37 @@
             align-items: center;
         }
 
-        .modal dd span {
-            flex-grow: 1;
-            word-break: normal;
+        .address-container {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .truncated-address {
+            flex: 1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-color);
+        }
+
+        .copy-icon {
+            cursor: pointer;
+            margin-left: 5px;
+            width: 18px;
+            height: 18px;
+            stroke: var(--accent-color);
+            transition: stroke 0.3s, transform 0.3s;
+        }
+
+        .copy-icon:hover {
+            stroke: var(--accent-hover);
+            transform: scale(1.1);
+        }
+
+        .solscan-link {
+            color: var(--accent-color);
+            text-decoration: underline;
         }
 
         .modal button {
@@ -224,10 +252,6 @@
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.2s;
-        }
-
-        #modal-wallet-holdings {
-            white-space: nowrap;
         }
     </style>
 </head>
@@ -258,7 +282,19 @@
         <h2>Wallet Details</h2>
         <dl>
             <dt>Address</dt>
-            <dd><a id="modal-wallet-address" href="#" target="_blank" style="color: var(--accent-color); text-decoration: underline; word-break: normal;"></a></dd>
+            <dd>
+                <div class="address-container">
+                    <span id="modal-wallet-address" class="truncated-address"></span>
+                    <svg class="copy-icon" onclick="copyAddress()" aria-label="Copy address to clipboard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <title>Copy address to clipboard</title>
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                </div>
+            </dd>
+            <dd>
+                <a id="solscan-link" href="#" target="_blank" class="solscan-link">SolScan</a>
+            </dd>
             <dt>Holdings</dt>
             <dd><span id="modal-wallet-holdings"></span></dd>
             <dt>Percentage of Total Supply</dt>
@@ -272,7 +308,7 @@
         const { Connection, PublicKey } = solanaWeb3;
         const connection = new Connection('https://mainnet.helius-rpc.com/?api-key=e9b2cb3c-7245-4cc3-91df-705e04d057a0', 'confirmed');
         const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-        const RAYDIUM_ADDRESS = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8'; // Raydium program address
+        const RAYDIUM_ADDRESS = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
 
         let currentDataset = { nodes: [], links: [] };
         let simulation;
@@ -281,9 +317,18 @@
         let height;
         let selectedNode = null;
         let hasLoadedOnce = false;
-        let currentSymbol = 'Unknown'; // To store the token symbol
+        let currentSymbol = 'Unknown';
+        let zoom; // Global zoom variable
 
-        // Updated function to fetch the token symbol from metadata
+        function copyAddress() {
+            const address = document.getElementById('modal-wallet-address').textContent;
+            navigator.clipboard.writeText(address).then(() => {
+                alert('Address copied to clipboard');
+            }).catch(err => {
+                console.error('Failed to copy address:', err);
+            });
+        }
+
         async function fetchTokenSymbol(tokenMintAddress) {
             try {
                 const metadataProgramId = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
@@ -297,49 +342,29 @@
                 );
 
                 const accountInfo = await connection.getAccountInfo(metadataAccount);
-                if (!accountInfo || !accountInfo.data) {
-                    console.warn('Metadata account not found or empty for mint:', tokenMintAddress);
-                    return 'Unknown';
-                }
+                if (!accountInfo || !accountInfo.data) return 'Unknown';
 
-                const data = accountInfo.data; // This is a Uint8Array
-
-                // Helper function to read unsigned 32-bit integer (little-endian) from Uint8Array
+                const data = accountInfo.data;
                 function readUInt32LE(arr, offset) {
-                    return (arr[offset]) |
-                           (arr[offset + 1] << 8) |
-                           (arr[offset + 2] << 16) |
-                           (arr[offset + 3] << 24);
+                    return (arr[offset]) | (arr[offset + 1] << 8) | (arr[offset + 2] << 16) | (arr[offset + 3] << 24);
                 }
 
                 let offset = 0;
                 const key = data[offset];
                 offset += 1;
-                if (key !== 4) { // Metadata key should be 4
-                    console.warn('Invalid metadata key:', key);
-                    return 'Unknown';
-                }
+                if (key !== 4) return 'Unknown';
 
-                offset += 32; // Skip update authority (32 bytes)
-                offset += 32; // Skip mint address (32 bytes)
+                offset += 32; // Skip update authority
+                offset += 32; // Skip mint address
                 const nameLength = readUInt32LE(data, offset);
-                offset += 4; // Skip name length field
-                offset += nameLength; // Skip name data
+                offset += 4 + nameLength;
                 const symbolLength = readUInt32LE(data, offset);
-                offset += 4; // Skip symbol length field
+                offset += 4;
 
-                // Ensure the data is long enough to contain the symbol
-                if (offset + symbolLength > data.length) {
-                    console.warn('Symbol data exceeds buffer length');
-                    return 'Unknown';
-                }
+                if (offset + symbolLength > data.length) return 'Unknown';
 
-                // Decode the symbol and remove trailing null characters and trim whitespace
-                const rawSymbol = new TextDecoder('utf-8').decode(
-                    data.slice(offset, offset + symbolLength)
-                );
-                const symbol = rawSymbol.replace(/\0+$/, '').trim(); // Remove trailing nulls and trim
-                return symbol || 'Unknown';
+                const rawSymbol = new TextDecoder('utf-8').decode(data.slice(offset, offset + symbolLength));
+                return rawSymbol.replace(/\0+$/, '').trim() || 'Unknown';
             } catch (error) {
                 console.error('Error fetching token symbol:', error);
                 return 'Unknown';
@@ -349,23 +374,12 @@
         async function fetchTokenData(tokenMintAddress) {
             try {
                 const tokenMintPubkey = new PublicKey(tokenMintAddress);
-
-                // Fetch total supply from the mint account
                 const mintInfo = await connection.getParsedAccountInfo(tokenMintPubkey);
-                console.log('Mint Info:', mintInfo); // Debug log to inspect structure
-                if (!mintInfo.value || !mintInfo.value.data || !mintInfo.value.data.parsed || !mintInfo.value.data.parsed.info) {
-                    throw new Error('Failed to fetch valid mint info');
-                }
+                if (!mintInfo.value?.data?.parsed?.info) throw new Error('Failed to fetch valid mint info');
+                
                 const decimals = mintInfo.value.data.parsed.info.decimals;
-                const supplyData = mintInfo.value.data.parsed.info.supply;
-                if (!supplyData) {
-                    throw new Error('Total supply not found in mint info');
-                }
-                const totalSupplyRaw = parseFloat(supplyData);
-                const totalSupply = totalSupplyRaw / Math.pow(10, decimals);
-                if (isNaN(totalSupply) || totalSupply <= 0) {
-                    throw new Error('Invalid total supply');
-                }
+                const totalSupply = parseFloat(mintInfo.value.data.parsed.info.supply) / Math.pow(10, decimals);
+                if (isNaN(totalSupply) || totalSupply <= 0) throw new Error('Invalid total supply');
 
                 const accounts = await connection.getParsedProgramAccounts(
                     TOKEN_PROGRAM_ID,
@@ -377,7 +391,7 @@
                     }
                 );
 
-                const nodes = accounts.map((account) => {
+                const nodes = accounts.map(account => {
                     const parsedInfo = account.account.data.parsed.info;
                     const holdings = parseFloat(parsedInfo.tokenAmount.uiAmountString);
                     const percentage = (holdings / totalSupply) * 100;
@@ -390,21 +404,18 @@
                     };
                 }).filter(node => node.holdings > 0);
 
-                const sortedHolders = nodes.sort((a, b) => b.holdings - a.holdings);
-                const topHolders = sortedHolders.slice(0, 100);
+                const topHolders = nodes.sort((a, b) => b.holdings - a.holdings).slice(0, 100);
                 await fetchTransferData(tokenMintAddress, topHolders);
+                
                 const links = [];
                 topHolders.forEach(node => {
                     node.linkedWallets.forEach(linkedId => {
-                        const target = topHolders.find(n => n.id === linkedId);
-                        if (target) {
+                        if (topHolders.some(n => n.id === linkedId)) {
                             links.push({ source: node.id, target: linkedId });
                         }
                     });
                 });
 
-                // Log percentages for debugging
-                console.log('Node Percentages:', topHolders.map(n => `${n.id}: ${n.percentage}%`));
                 return { nodes: topHolders, links };
             } catch (error) {
                 console.error('Error fetching token data:', error);
@@ -416,11 +427,7 @@
         async function fetchTransferData(tokenMintAddress, nodes) {
             try {
                 const tokenMintPubkey = new PublicKey(tokenMintAddress);
-                const signatures = await connection.getSignaturesForAddress(
-                    tokenMintPubkey,
-                    { limit: 100 }
-                );
-
+                const signatures = await connection.getSignaturesForAddress(tokenMintPubkey, { limit: 100 });
                 const walletSet = new Set(nodes.map(node => node.id));
                 const transferMap = new Map();
 
@@ -429,15 +436,13 @@
                         commitment: 'confirmed',
                         maxSupportedTransactionVersion: 0
                     });
-                    if (!tx || !tx.transaction || !tx.transaction.message) continue;
+                    if (!tx?.transaction?.message) continue;
 
                     const instructions = tx.transaction.message.instructions;
                     for (const instruction of instructions) {
                         if (instruction.programId.toBase58() === TOKEN_PROGRAM_ID.toBase58() &&
                             instruction.parsed?.type === 'transfer') {
-                            const source = instruction.parsed.info.source;
-                            const destination = instruction.parsed.info.destination;
-
+                            const { source, destination } = instruction.parsed.info;
                             if (walletSet.has(source) && walletSet.has(destination)) {
                                 if (!transferMap.has(source)) transferMap.set(source, new Set());
                                 transferMap.get(source).add(destination);
@@ -461,13 +466,12 @@
         function initVisualization() {
             const visualizationDiv = document.getElementById('visualization');
             d3.select('#visualization svg').remove();
-
             visualizationDiv.innerHTML = '';
 
             if (hasLoadedOnce && currentDataset.nodes.length === 0) {
                 visualizationDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">No data available</p>';
                 return;
-            } else if (!hasLoadedOnce && currentDataset.nodes.length === 0) {
+            } else if (!hasLoadedOnce) {
                 visualizationDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>';
                 return;
             }
@@ -495,7 +499,6 @@
                 .attr('height', height);
 
             const defs = svg.append('defs');
-
             const gradient = defs.append('radialGradient')
                 .attr('id', 'sphere-gradient')
                 .attr('cx', '50%')
@@ -503,12 +506,8 @@
                 .attr('r', '50%')
                 .attr('fx', '30%')
                 .attr('fy', '30%');
-            gradient.append('stop')
-                .attr('offset', '0%')
-                .attr('stop-color', 'var(--accent-hover)');
-            gradient.append('stop')
-                .attr('offset', '100%')
-                .attr('stop-color', 'var(--accent-color)');
+            gradient.append('stop').attr('offset', '0%').attr('stop-color', 'var(--accent-hover)');
+            gradient.append('stop').attr('offset', '100%').attr('stop-color', 'var(--accent-color)');
 
             const linkedGradient = defs.append('radialGradient')
                 .attr('id', 'linked-sphere-gradient')
@@ -517,14 +516,10 @@
                 .attr('r', '50%')
                 .attr('fx', '30%')
                 .attr('fy', '30%');
-            linkedGradient.append('stop')
-                .attr('offset', '0%')
-                .attr('stop-color', '#FFD700');
-            linkedGradient.append('stop')
-                .attr('offset', '100%')
-                .attr('stop-color', 'var(--secondary-accent)');
+            linkedGradient.append('stop').attr('offset', '0%').attr('stop-color', '#FFD700');
+            linkedGradient.append('stop').attr('offset', '100%').attr('stop-color', 'var(--secondary-accent)');
 
-            const zoom = d3.zoom()
+            zoom = d3.zoom()
                 .scaleExtent([0.1, 10])
                 .on('zoom', (event) => {
                     g.attr('transform', event.transform);
@@ -547,7 +542,7 @@
                 .data(currentDataset.nodes)
                 .enter()
                 .append('circle')
-                .attr('r', d => Math.max(5, 20 * Math.sqrt(d.percentage))) // Adjusted scaling factor from 10 to 20
+                .attr('r', d => Math.max(5, 20 * Math.sqrt(d.percentage)))
                 .attr('fill', d => d.isLP ? 'var(--lp-color)' : (d.linkedWallets.length > 0 ? 'url(#linked-sphere-gradient)' : 'url(#sphere-gradient)'))
                 .classed('lp', d => d.isLP)
                 .on('click', nodeClicked)
@@ -567,17 +562,20 @@
                 .force('charge', d3.forceManyBody().strength(-200))
                 .force('center', d3.forceCenter(width / 2, height / 2))
                 .on('tick', () => {
-                    links
-                        .attr('x1', d => d.source.x)
-                        .attr('y1', d => d.source.y)
-                        .attr('x2', d => d.target.x)
-                        .attr('y2', d => d.target.y);
-                    nodes
-                        .attr('cx', d => d.x)
-                        .attr('cy', d => d.y);
+                    links.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+                         .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+                    nodes.attr('cx', d => d.x).attr('cy', d => d.y);
                 });
 
             updateStatistics();
+        }
+
+        function zoomToNode(node) {
+            const scale = 2;
+            const translate = [width / 2 - node.x * scale, height / 2 - node.y * scale];
+            svg.transition()
+                .duration(750)
+                .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
         }
 
         function updateStatistics() {
@@ -593,10 +591,9 @@
             selectedNode = d;
 
             const solscanUrl = `https://solscan.io/account/${d.id}`;
-            const addressLink = document.getElementById('modal-wallet-address');
-            addressLink.textContent = d.id;
-            addressLink.href = solscanUrl;
-
+            const addressSpan = document.getElementById('modal-wallet-address');
+            addressSpan.textContent = d.id;
+            document.getElementById('solscan-link').href = solscanUrl;
             document.getElementById('modal-wallet-holdings').textContent = `${d.holdings.toFixed(2)} $${currentSymbol}`;
             document.getElementById('modal-wallet-percentage').textContent = `${d.percentage.toFixed(2)}%`;
             document.getElementById('wallet-modal').classList.add('active');
@@ -605,9 +602,7 @@
         function showTooltip(event, d) {
             const tooltip = document.getElementById('tooltip');
             tooltip.innerHTML = `<div>Address: ${d.id}</div><div>Holdings: ${d.holdings.toFixed(2)} (${d.percentage.toFixed(2)}%)</div>`;
-            if (d.isLP) {
-                tooltip.innerHTML += `<div>Liquidity Provider</div>`;
-            }
+            if (d.isLP) tooltip.innerHTML += `<div>Liquidity Provider</div>`;
             tooltip.style.opacity = 1;
             moveTooltip(event);
         }
@@ -652,13 +647,13 @@
                     if (match) {
                         nodes.filter(d => d.id === searchValue).classed('selected', true);
                         const solscanUrl = `https://solscan.io/account/${match.id}`;
-                        const addressLink = document.getElementById('modal-wallet-address');
-                        addressLink.textContent = match.id;
-                        addressLink.href = solscanUrl;
+                        document.getElementById('modal-wallet-address').textContent = match.id;
+                        document.getElementById('solscan-link').href = solscanUrl;
                         document.getElementById('modal-wallet-holdings').textContent = `${match.holdings.toFixed(2)} $${currentSymbol}`;
                         document.getElementById('modal-wallet-percentage').textContent = `${match.percentage.toFixed(2)}%`;
                         document.getElementById('wallet-modal').classList.add('active');
                         selectedNode = match;
+                        zoomToNode(match); // Zoom to the searched node
                     } else {
                         alert(`Wallet "${searchValue}" not found in current dataset.`);
                         document.getElementById('wallet-modal').classList.remove('active');
