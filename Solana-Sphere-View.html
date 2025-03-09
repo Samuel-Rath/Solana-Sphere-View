@@ -597,6 +597,8 @@
             document.getElementById('modal-wallet-holdings').textContent = `${d.holdings.toFixed(2)} $${currentSymbol}`;
             document.getElementById('modal-wallet-percentage').textContent = `${d.percentage.toFixed(2)}%`;
             document.getElementById('wallet-modal').classList.add('active');
+
+            zoomToNode(d); // Zoom to the clicked node
         }
 
         function showTooltip(event, d) {
