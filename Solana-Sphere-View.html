@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -115,14 +116,34 @@
             top: 60px;
             right: 0;
             bottom: 0;
+        }
+
+        #grid-background {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
             background: linear-gradient(135deg, var(--dark-bg), #2A2A2A);
             background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
             background-size: 20px 20px;
+        }
+
+        #content {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            transition: opacity 0.5s ease;
             display: flex;
-            justify-content: center;
             align-items: center;
-            text-align: center;
+            justify-content: center;
+        }
+
+        #content.loading {
+            opacity: 0;
         }
 
         .links line {
@@ -253,8 +274,90 @@
             opacity: 0;
             transition: opacity 0.2s;
         }
+
+        /* Loading screen styles */
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 99;
+            background: transparent;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        #loading-screen.active {
+            opacity: 1;
+        }
+
+        #globe {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: var(--accent-color);
+            box-shadow: 0 0 20px var(--accent-color);
+            animation: spin 3s linear infinite, pulse 1.5s ease-in-out infinite, colorChange 6s infinite;
+        }
+
+        #loading-message {
+            margin-top: 20px;
+            font-size: 18px;
+            color: var(--text-color);
+            text-shadow: 0 0 5px var(--accent-color);
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        @keyframes colorChange {
+            0% {
+                background: var(--accent-color);
+                box-shadow: 0 0 20px var(--accent-color);
+            }
+
+            33% {
+                background: var(--accent-hover);
+                box-shadow: 0 0 20px var(--accent-hover);
+            }
+
+            66% {
+                background: var(--secondary-accent);
+                box-shadow: 0 0 20px var(--secondary-accent);
+            }
+
+            100% {
+                background: var(--lp-color);
+                box-shadow: 0 0 20px var(--lp-color);
+            }
+        }
     </style>
 </head>
+
 <body>
     <div class="header">
         <p id="title" class="title">Solana Sphere View</p>
@@ -276,7 +379,10 @@
         </div>
     </div>
     <div id="visualization">
-        <p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>
+        <div id="grid-background"></div>
+        <div id="content">
+            <p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>
+        </div>
     </div>
     <div class="modal" id="wallet-modal">
         <h2>Wallet Details</h2>
@@ -285,7 +391,9 @@
             <dd>
                 <div class="address-container">
                     <span id="modal-wallet-address" class="truncated-address"></span>
-                    <svg class="copy-icon" onclick="copyAddress()" aria-label="Copy address to clipboard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <svg class="copy-icon" onclick="copyAddress()" aria-label="Copy address to clipboard"
+                        xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
                         <title>Copy address to clipboard</title>
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                         <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
@@ -318,7 +426,62 @@
         let selectedNode = null;
         let hasLoadedOnce = false;
         let currentSymbol = 'Unknown';
-        let zoom; // Global zoom variable
+        let zoom;
+
+        // Array of random loading messages
+        const loadingMessages = [
+            "Take a coffee as you wait...",
+            "Fetching data from the blockchain...",
+            "Analyzing token holders...",
+            "Building the sphere view...",
+            "Almost there...",
+            "Loading, please wait...",
+            "Grabbing the latest data...",
+            "Patience is a virtue...",
+            "This might take a moment...",
+            "Hang tight, we're working on it..."
+        ];
+
+        // Function to create the loading screen dynamically
+        function createLoadingScreen() {
+            const loadingScreen = document.createElement('div');
+            loadingScreen.id = 'loading-screen';
+            loadingScreen.style.display = 'none';
+            loadingScreen.innerHTML = `
+                <div id="globe"></div>
+                <p id="loading-message"></p>
+            `;
+            return loadingScreen;
+        }
+
+        // Show the loading screen with fade effect
+        function showLoadingScreen() {
+            const contentDiv = document.getElementById('content');
+            contentDiv.classList.add('loading'); // Start fading out content
+
+            const visualizationDiv = document.getElementById('visualization');
+            let loadingScreen = document.getElementById('loading-screen');
+            if (!loadingScreen) {
+                loadingScreen = createLoadingScreen();
+                visualizationDiv.appendChild(loadingScreen);
+            }
+            const message = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+            document.getElementById('loading-message').textContent = message;
+            loadingScreen.style.display = 'flex';
+            loadingScreen.classList.add('active'); // Start fading in loading screen
+        }
+
+        // Hide and remove the loading screen
+        function hideLoadingScreen() {
+            const loadingScreen = document.getElementById('loading-screen');
+            if (loadingScreen) {
+                loadingScreen.classList.remove('active'); // Start fading out loading screen
+                setTimeout(() => {
+                    loadingScreen.remove();
+                    document.getElementById('content').classList.remove('loading'); // Start fading in content
+                }, 500); // Wait for fade-out of loading screen
+            }
+        }
 
         function copyAddress() {
             const address = document.getElementById('modal-wallet-address').textContent;
@@ -376,7 +539,7 @@
                 const tokenMintPubkey = new PublicKey(tokenMintAddress);
                 const mintInfo = await connection.getParsedAccountInfo(tokenMintPubkey);
                 if (!mintInfo.value?.data?.parsed?.info) throw new Error('Failed to fetch valid mint info');
-                
+
                 const decimals = mintInfo.value.data.parsed.info.decimals;
                 const totalSupply = parseFloat(mintInfo.value.data.parsed.info.supply) / Math.pow(10, decimals);
                 if (isNaN(totalSupply) || totalSupply <= 0) throw new Error('Invalid total supply');
@@ -406,7 +569,7 @@
 
                 const topHolders = nodes.sort((a, b) => b.holdings - a.holdings).slice(0, 100);
                 await fetchTransferData(tokenMintAddress, topHolders);
-                
+
                 const links = [];
                 topHolders.forEach(node => {
                     node.linkedWallets.forEach(linkedId => {
@@ -464,20 +627,19 @@
         }
 
         function initVisualization() {
-            const visualizationDiv = document.getElementById('visualization');
-            d3.select('#visualization svg').remove();
-            visualizationDiv.innerHTML = '';
+            const contentDiv = document.getElementById('content');
+            contentDiv.innerHTML = ''; // Clear previous content
 
             if (hasLoadedOnce && currentDataset.nodes.length === 0) {
-                visualizationDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">No data available</p>';
+                contentDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">No data available</p>';
                 return;
             } else if (!hasLoadedOnce) {
-                visualizationDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>';
+                contentDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>';
                 return;
             }
 
-            width = visualizationDiv.clientWidth;
-            height = visualizationDiv.clientHeight;
+            width = contentDiv.clientWidth;
+            height = contentDiv.clientHeight;
 
             currentDataset.nodes.forEach((node, i) => {
                 if (i === 0) {
@@ -493,7 +655,7 @@
                 }
             });
 
-            svg = d3.select('#visualization')
+            svg = d3.select('#content')
                 .append('svg')
                 .attr('width', width)
                 .attr('height', height);
@@ -563,7 +725,7 @@
                 .force('center', d3.forceCenter(width / 2, height / 2))
                 .on('tick', () => {
                     links.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-                         .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+                        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
                     nodes.attr('cx', d => d.x).attr('cy', d => d.y);
                 });
 
@@ -598,7 +760,7 @@
             document.getElementById('modal-wallet-percentage').textContent = `${d.percentage.toFixed(2)}%`;
             document.getElementById('wallet-modal').classList.add('active');
 
-            zoomToNode(d); // Zoom to the clicked node
+            zoomToNode(d);
         }
 
         function showTooltip(event, d) {
@@ -619,7 +781,7 @@
             tooltip.style.top = `${event.pageY - 25}px`;
         }
 
-        window.addEventListener('load', function() {
+        window.addEventListener('load', function () {
             const loadTokenButton = document.getElementById('load-token');
             const searchWalletButton = document.getElementById('search-wallet');
             const closeModalButton = document.getElementById('close-modal');
@@ -631,11 +793,26 @@
                         alert('Please enter a token address.');
                         return;
                     }
-                    currentSymbol = await fetchTokenSymbol(tokenInput);
-                    document.getElementById('title').textContent = `Solana Sphere View for $${currentSymbol}`;
-                    currentDataset = await fetchTokenData(tokenInput);
-                    hasLoadedOnce = true;
-                    initVisualization();
+
+                    const originalLoadText = loadTokenButton.textContent;
+                    loadTokenButton.textContent = 'Loading...';
+                    loadTokenButton.disabled = true;
+                    showLoadingScreen();
+
+                    try {
+                        currentSymbol = await fetchTokenSymbol(tokenInput);
+                        document.getElementById('title').textContent = `Solana Sphere View for $${currentSymbol}`;
+                        currentDataset = await fetchTokenData(tokenInput);
+                        hasLoadedOnce = true;
+                        initVisualization();
+                    } catch (error) {
+                        console.error('Error loading token data:', error);
+                        alert('Failed to load token data.');
+                    } finally {
+                        hideLoadingScreen();
+                        loadTokenButton.textContent = originalLoadText;
+                        loadTokenButton.disabled = false;
+                    }
                 });
             }
 
@@ -655,7 +832,7 @@
                         document.getElementById('modal-wallet-percentage').textContent = `${match.percentage.toFixed(2)}%`;
                         document.getElementById('wallet-modal').classList.add('active');
                         selectedNode = match;
-                        zoomToNode(match); // Zoom to the searched node
+                        zoomToNode(match);
                     } else {
                         alert(`Wallet "${searchValue}" not found in current dataset.`);
                         document.getElementById('wallet-modal').classList.remove('active');
@@ -678,4 +855,5 @@
         window.addEventListener('resize', initVisualization);
     </script>
 </body>
+
 </html>
