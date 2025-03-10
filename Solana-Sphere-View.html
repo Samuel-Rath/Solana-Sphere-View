@@ -1,859 +1,838 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solana SphereView</title>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
-    <style>
-        :root {
-            --dark-bg: #1A1A1A;
-            --panel-bg: #2A2A2A;
-            --text-color: #F5F5F5;
-            --accent-color: #2C7A7B;
-            --accent-hover: #4DB6AC;
-            --secondary-accent: #D4AF37;
-            --modal-bg: rgba(42, 42, 42, 0.9);
-            --lp-color: #FF6347;
-        }
-
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: var(--dark-bg);
-            color: var(--text-color);
-            overflow: hidden;
-        }
-
-        .header {
-            position: fixed;
-            top: 0;
-            left: 250px;
-            right: 0;
-            height: 60px;
-            background: linear-gradient(90deg, rgba(44, 122, 123, 0.8), rgba(212, 175, 55, 0.8));
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            border-bottom: 1px solid var(--accent-color);
-            backdrop-filter: blur(5px);
-            padding: 0 20px;
-        }
-
-        .title {
-            font-size: 28px;
-            font-weight: bold;
-            color: var(--text-color);
-            text-shadow: 0 0 8px var(--accent-color);
-            margin: 0;
-            letter-spacing: 1px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-        }
-
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            width: 250px;
-            height: 100%;
-            background: var(--panel-bg);
-            padding: 20px;
-            box-sizing: border-box;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-
-        .input-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: var(--accent-color);
-        }
-
-        input {
-            width: 100%;
-            padding: 8px;
-            background: #FFFFFF;
-            border: 1px solid var(--accent-color);
-            color: #333333;
-            box-sizing: border-box;
-        }
-
-        button {
-            width: 100%;
-            padding: 8px;
-            background: var(--accent-color);
-            border: none;
-            color: #FFFFFF;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        button:hover {
-            background: var(--accent-hover);
-        }
-
-        .stats {
-            margin-top: 20px;
-        }
-
-        .stats p {
-            margin: 5px 0;
-        }
-
-        #visualization {
-            position: absolute;
-            left: 250px;
-            top: 60px;
-            right: 0;
-            bottom: 0;
-        }
-
-        #grid-background {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(135deg, var(--dark-bg), #2A2A2A);
-            background-image: linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
-            background-size: 20px 20px;
-        }
-
-        #content {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            transition: opacity 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        #content.loading {
-            opacity: 0;
-        }
-
-        .links line {
-            stroke: var(--text-color);
-            stroke-opacity: 0.6;
-            transition: stroke-width 0.3s;
-        }
-
-        .nodes circle {
-            stroke: var(--text-color);
-            stroke-width: 1.5px;
-            cursor: pointer;
-            transition: filter 0.3s;
-        }
-
-        .nodes circle.lp {
-            fill: var(--lp-color);
-            stroke: var(--lp-color);
-        }
-
-        .nodes circle:hover {
-            stroke: var(--secondary-accent);
-            stroke-width: 3px;
-            filter: drop-shadow(0 0 5px var(--secondary-accent));
-        }
-
-        .nodes circle.selected {
-            stroke: var(--secondary-accent);
-            stroke-width: 3px;
-            filter: drop-shadow(0 0 5px var(--secondary-accent));
-        }
-
-        .modal {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: var(--modal-bg);
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-            z-index: 1000;
-            display: none;
-            width: 80%;
-            max-width: 400px;
-            text-align: left;
-        }
-
-        .modal.active {
-            display: block;
-        }
-
-        .modal h2 {
-            text-align: center;
-            color: var(--secondary-accent);
-            margin-top: 0;
-        }
-
-        .modal dl {
-            margin: 20px 0;
-        }
-
-        .modal dt {
-            font-weight: bold;
-            color: var(--accent-color);
-            margin-bottom: 5px;
-        }
-
-        .modal dd {
-            margin: 0 0 15px 0;
-            color: var(--text-color);
-            display: flex;
-            align-items: center;
-        }
-
-        .address-container {
-            display: flex;
-            align-items: center;
-            width: 100%;
-        }
-
-        .truncated-address {
-            flex: 1;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            color: var(--text-color);
-        }
-
-        .copy-icon {
-            cursor: pointer;
-            margin-left: 5px;
-            width: 18px;
-            height: 18px;
-            stroke: var(--accent-color);
-            transition: stroke 0.3s, transform 0.3s;
-        }
-
-        .copy-icon:hover {
-            stroke: var(--accent-hover);
-            transform: scale(1.1);
-        }
-
-        .solscan-link {
-            color: var(--accent-color);
-            text-decoration: underline;
-        }
-
-        .modal button {
-            background: var(--accent-color);
-            color: #FFFFFF;
-            padding: 8px 16px;
-            border: none;
-            cursor: pointer;
-        }
-
-        .modal button:hover {
-            background: var(--accent-hover);
-        }
-
-        #tooltip {
-            position: absolute;
-            background: var(--panel-bg);
-            padding: 5px 10px;
-            border: 1px solid var(--accent-color);
-            color: var(--text-color);
-            pointer-events: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-        }
-
-        /* Loading screen styles */
-        #loading-screen {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 99;
-            background: transparent;
-            opacity: 0;
-            transition: opacity 0.5s ease;
-        }
-
-        #loading-screen.active {
-            opacity: 1;
-        }
-
-        #globe {
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            background: var(--accent-color);
-            box-shadow: 0 0 20px var(--accent-color);
-            animation: spin 3s linear infinite, pulse 1.5s ease-in-out infinite, colorChange 6s infinite;
-        }
-
-        #loading-message {
-            margin-top: 20px;
-            font-size: 18px;
-            color: var(--text-color);
-            text-shadow: 0 0 5px var(--accent-color);
-        }
-
-        @keyframes spin {
-            from {
-                transform: rotate(0deg);
-            }
-
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        @keyframes pulse {
-
-            0%,
-            100% {
-                transform: scale(1);
-            }
-
-            50% {
-                transform: scale(1.2);
-            }
-        }
-
-        @keyframes colorChange {
-            0% {
-                background: var(--accent-color);
-                box-shadow: 0 0 20px var(--accent-color);
-            }
-
-            33% {
-                background: var(--accent-hover);
-                box-shadow: 0 0 20px var(--accent-hover);
-            }
-
-            66% {
-                background: var(--secondary-accent);
-                box-shadow: 0 0 20px var(--secondary-accent);
-            }
-
-            100% {
-                background: var(--lp-color);
-                box-shadow: 0 0 20px var(--lp-color);
-            }
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solana SphereView</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://unpkg.com/@solana/web3.js@latest/lib/index.iife.min.js"></script>
+  <style>
+    :root {
+      --dark-bg: #1A1A1A;
+      --panel-bg: #2A2A2A;
+      --text-color: #F5F5F5;
+      --accent-color: #2C7A7B;
+      --accent-hover: #4DB6AC;
+      --secondary-accent: #D4AF37;
+      --modal-bg: rgba(42, 42, 42, 0.9);
+      --lp-color: #FF6347;
+      /* New variable for nodes that are connected */
+      --connection-color: #00BFFF;
+    }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: var(--dark-bg);
+      color: var(--text-color);
+      overflow: hidden;
+    }
+    .header {
+      position: fixed;
+      top: 0;
+      left: 250px;
+      right: 0;
+      height: 60px;
+      background: linear-gradient(90deg, rgba(44,122,123,0.8), rgba(212,175,55,0.8));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+      border-bottom: 1px solid var(--accent-color);
+      backdrop-filter: blur(5px);
+      padding: 0 20px;
+    }
+    .title {
+      font-size: 28px;
+      font-weight: bold;
+      color: var(--text-color);
+      text-shadow: 0 0 8px var(--accent-color);
+      margin: 0;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+    .sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 250px;
+      height: 100%;
+      background: var(--panel-bg);
+      padding: 20px;
+      box-sizing: border-box;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .input-group { margin-bottom: 20px; }
+    label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--accent-color);
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      background: #FFFFFF;
+      border: 1px solid var(--accent-color);
+      color: #333333;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      padding: 8px;
+      background: var(--accent-color);
+      border: none;
+      color: #FFFFFF;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    button:hover { background: var(--accent-hover); }
+    .stats { margin-top: 20px; }
+    .stats p { margin: 5px 0; }
+    #visualization {
+      position: absolute;
+      left: 250px;
+      top: 60px;
+      right: 0;
+      bottom: 0;
+    }
+    #grid-background {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, var(--dark-bg), #2A2A2A);
+      background-image: linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    #content {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      transition: opacity 0.5s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #content.loading { opacity: 0; }
+    .sol-transfers line {
+      stroke: var(--accent-color);
+      stroke-opacity: 0.8;
+      stroke-width: 2;
+      stroke-dasharray: 5, 5;
+      transition: stroke 0.3s, stroke-width 0.3s;
+    }
+    .nodes circle {
+      stroke: var(--text-color);
+      stroke-width: 1.5px;
+      cursor: pointer;
+      transition: filter 0.3s, stroke 0.3s;
+    }
+    .nodes circle.lp {
+      fill: var(--lp-color);
+      stroke: var(--lp-color);
+    }
+    .nodes circle:hover {
+      stroke: var(--secondary-accent);
+      stroke-width: 3px;
+      filter: drop-shadow(0 0 5px var(--secondary-accent));
+    }
+    .nodes circle.selected {
+      stroke: var(--secondary-accent);
+      stroke-width: 3px;
+      filter: drop-shadow(0 0 5px var(--secondary-accent));
+    }
+    .modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: var(--modal-bg);
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      z-index: 1000;
+      display: none;
+      width: 80%;
+      max-width: 400px;
+      text-align: left;
+    }
+    .modal.active { display: block; }
+    .modal h2 {
+      text-align: center;
+      color: var(--secondary-accent);
+      margin-top: 0;
+    }
+    .modal dl { margin: 20px 0; }
+    .modal dt {
+      font-weight: bold;
+      color: var(--accent-color);
+      margin-bottom: 5px;
+    }
+    .modal dd {
+      margin: 0 0 15px 0;
+      color: var(--text-color);
+      display: flex;
+      align-items: center;
+    }
+    .address-container {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .truncated-address {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--text-color);
+    }
+    .copy-icon {
+      cursor: pointer;
+      margin-left: 5px;
+      width: 18px;
+      height: 18px;
+      stroke: var(--accent-color);
+      transition: stroke 0.3s, transform 0.3s;
+    }
+    .copy-icon:hover {
+      stroke: var(--accent-hover);
+      transform: scale(1.1);
+    }
+    .solscan-link {
+      color: var(--accent-color);
+      text-decoration: underline;
+    }
+    .modal button {
+      background: var(--accent-color);
+      color: #FFFFFF;
+      padding: 8px 16px;
+      border: none;
+      cursor: pointer;
+    }
+    .modal button:hover { background: var(--accent-hover); }
+    #tooltip {
+      position: absolute;
+      background: var(--panel-bg);
+      padding: 5px 10px;
+      border: 1px solid var(--accent-color);
+      color: var(--text-color);
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    #loading-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      z-index: 99;
+      background: transparent;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    #loading-screen.active { opacity: 1; }
+    #globe {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: var(--accent-color);
+      box-shadow: 0 0 20px var(--accent-color);
+      animation: spin 3s linear infinite, pulse 1.5s ease-in-out infinite, colorChange 6s infinite;
+    }
+    #loading-message {
+      margin-top: 20px;
+      font-size: 18px;
+      color: var(--text-color);
+      text-shadow: 0 0 5px var(--accent-color);
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.2); }
+    }
+    @keyframes colorChange {
+      0% { background: var(--accent-color); box-shadow: 0 0 20px var(--accent-color); }
+      33% { background: var(--accent-hover); box-shadow: 0 0 20px var(--accent-hover); }
+      66% { background: var(--secondary-accent); box-shadow: 0 0 20px var(--secondary-accent); }
+      100% { background: var(--lp-color); box-shadow: 0 0 20px var(--lp-color); }
+    }
+  </style>
 </head>
-
 <body>
-    <div class="header">
-        <p id="title" class="title">Solana Sphere View</p>
+  <div class="header">
+    <p id="title" class="title">Solana Sphere View</p>
+  </div>
+  <div class="sidebar">
+    <div class="input-group">
+      <label for="token-input">Token Address</label>
+      <input type="text" id="token-input" placeholder="Enter token address">
+      <button id="load-token">Load</button>
     </div>
-    <div class="sidebar">
-        <div class="input-group">
-            <label for="token-input">Token Address</label>
-            <input type="text" id="token-input" placeholder="Enter token address">
-            <button id="load-token">Load</button>
-        </div>
-        <div class="input-group">
-            <label for="search-input">Wallet Address</label>
-            <input type="text" id="search-input" placeholder="Enter wallet address">
-            <button id="search-wallet">Search</button>
-        </div>
-        <div class="stats">
-            <p id="wallet-count">Wallets: 0</p>
-            <p id="total-holdings">Total Holdings: 0</p>
-        </div>
+    <div class="input-group">
+      <label for="search-input">Wallet Address</label>
+      <input type="text" id="search-input" placeholder="Enter wallet address">
+      <button id="search-wallet">Search</button>
     </div>
-    <div id="visualization">
-        <div id="grid-background"></div>
-        <div id="content">
-            <p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>
+    <div class="stats">
+      <p id="wallet-count">Wallets: 0</p>
+      <p id="total-transfers">Total SOL Transfers: 0</p>
+    </div>
+  </div>
+  <div id="visualization">
+    <div id="grid-background"></div>
+    <div id="content">
+      <p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>
+    </div>
+  </div>
+  <div class="modal" id="wallet-modal">
+    <h2>Wallet Details</h2>
+    <dl>
+      <dt>Address</dt>
+      <dd>
+        <div class="address-container">
+          <span id="modal-wallet-address" class="truncated-address"></span>
+          <svg class="copy-icon" onclick="copyAddress()" aria-label="Copy address to clipboard" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <title>Copy address to clipboard</title>
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
         </div>
-    </div>
-    <div class="modal" id="wallet-modal">
-        <h2>Wallet Details</h2>
-        <dl>
-            <dt>Address</dt>
-            <dd>
-                <div class="address-container">
-                    <span id="modal-wallet-address" class="truncated-address"></span>
-                    <svg class="copy-icon" onclick="copyAddress()" aria-label="Copy address to clipboard"
-                        xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <title>Copy address to clipboard</title>
-                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                    </svg>
-                </div>
-            </dd>
-            <dd>
-                <a id="solscan-link" href="#" target="_blank" class="solscan-link">SolScan</a>
-            </dd>
-            <dt>Holdings</dt>
-            <dd><span id="modal-wallet-holdings"></span></dd>
-            <dt>Percentage of Total Supply</dt>
-            <dd><span id="modal-wallet-percentage"></span></dd>
-        </dl>
-        <button id="close-modal">Close</button>
-    </div>
-    <div id="tooltip"></div>
+      </dd>
+      <dd>
+        <a id="solscan-link" href="#" target="_blank" class="solscan-link">SolScan</a>
+      </dd>
+      <dt>Holdings</dt>
+      <dd><span id="modal-wallet-holdings"></span></dd>
+      <dt>Percentage of Total Supply</dt>
+      <dd><span id="modal-wallet-percentage"></span></dd>
+    </dl>
+    <button id="close-modal">Close</button>
+  </div>
+  <div id="tooltip"></div>
 
-    <script>
-        const { Connection, PublicKey } = solanaWeb3;
-        const connection = new Connection('https://mainnet.helius-rpc.com/?api-key=e9b2cb3c-7245-4cc3-91df-705e04d057a0', 'confirmed');
-        const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
-        const RAYDIUM_ADDRESS = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
+  <script>
+    // Import Solana web3 objects
+    const { Connection, PublicKey, SystemProgram } = solanaWeb3;
+    const connection = new Connection('https://mainnet.helius-rpc.com/?api-key=e9b2cb3c-7245-4cc3-91df-705e04d057a0', 'confirmed');
+    const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
+    const RAYDIUM_ADDRESS = '675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8';
 
-        let currentDataset = { nodes: [], links: [] };
-        let simulation;
-        let svg;
-        let width;
-        let height;
-        let selectedNode = null;
-        let hasLoadedOnce = false;
-        let currentSymbol = 'Unknown';
-        let zoom;
+    let currentDataset = { nodes: [], solTransfers: [] };
+    let simulation, svg, width, height, selectedNode = null;
+    let hasLoadedOnce = false, currentSymbol = 'Unknown', zoom;
 
-        // Array of random loading messages
-        const loadingMessages = [
-            "Take a coffee as you wait...",
-            "Fetching data from the blockchain...",
-            "Analyzing token holders...",
-            "Building the sphere view...",
-            "Almost there...",
-            "Loading, please wait...",
-            "Grabbing the latest data...",
-            "Patience is a virtue...",
-            "This might take a moment...",
-            "Hang tight, we're working on it..."
-        ];
+    const loadingMessages = [
+      "Take a coffee as you wait...",
+      "Fetching data from the blockchain...",
+      "Analyzing wallets...",
+      "Building the sphere view...",
+      "Almost there...",
+      "Loading, please wait...",
+      "Grabbing the latest data...",
+      "Patience is a virtue...",
+      "This might take a moment...",
+      "Hang tight, we're working on it..."
+    ];
 
-        // Function to create the loading screen dynamically
-        function createLoadingScreen() {
-            const loadingScreen = document.createElement('div');
-            loadingScreen.id = 'loading-screen';
-            loadingScreen.style.display = 'none';
-            loadingScreen.innerHTML = `
-                <div id="globe"></div>
-                <p id="loading-message"></p>
-            `;
-            return loadingScreen;
+    // Create and return a loading screen element
+    function createLoadingScreen() {
+      const loadingScreen = document.createElement('div');
+      loadingScreen.id = 'loading-screen';
+      loadingScreen.style.display = 'none';
+      loadingScreen.innerHTML = `
+        <div id="globe"></div>
+        <p id="loading-message"></p>
+      `;
+      return loadingScreen;
+    }
+
+    // Show the loading screen with a random message
+    function showLoadingScreen() {
+      const contentDiv = document.getElementById('content');
+      contentDiv.classList.add('loading');
+      const visualizationDiv = document.getElementById('visualization');
+      let loadingScreen = document.getElementById('loading-screen');
+      if (!loadingScreen) {
+        loadingScreen = createLoadingScreen();
+        visualizationDiv.appendChild(loadingScreen);
+      }
+      const message = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
+      document.getElementById('loading-message').textContent = message;
+      loadingScreen.style.display = 'flex';
+      loadingScreen.classList.add('active');
+    }
+
+    // Hide and remove the loading screen
+    function hideLoadingScreen() {
+      const loadingScreen = document.getElementById('loading-screen');
+      if (loadingScreen) {
+        loadingScreen.classList.remove('active');
+        setTimeout(() => {
+          loadingScreen.remove();
+          document.getElementById('content').classList.remove('loading');
+        }, 500);
+      }
+    }
+
+    // Copy wallet address to clipboard
+    function copyAddress() {
+      const address = document.getElementById('modal-wallet-address').textContent;
+      navigator.clipboard.writeText(address).then(() => {
+        alert('Address copied to clipboard');
+      }).catch(err => {
+        console.error('Failed to copy address:', err);
+      });
+    }
+
+    // Fetch token symbol from metadata
+    async function fetchTokenSymbol(tokenMintAddress) {
+      try {
+        const metadataProgramId = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
+        const [metadataAccount] = await PublicKey.findProgramAddress(
+          [
+            new TextEncoder().encode('metadata'),
+            metadataProgramId.toBuffer(),
+            new PublicKey(tokenMintAddress).toBuffer()
+          ],
+          metadataProgramId
+        );
+        const accountInfo = await connection.getAccountInfo(metadataAccount);
+        if (!accountInfo || !accountInfo.data) return 'Unknown';
+        const data = accountInfo.data;
+        function readUInt32LE(arr, offset) {
+          return (arr[offset]) | (arr[offset+1] << 8) | (arr[offset+2] << 16) | (arr[offset+3] << 24);
         }
+        let offset = 0;
+        const key = data[offset];
+        offset += 1;
+        if (key !== 4) return 'Unknown';
+        offset += 32; // Skip update authority
+        offset += 32; // Skip mint address
+        const nameLength = readUInt32LE(data, offset);
+        offset += 4 + nameLength;
+        const symbolLength = readUInt32LE(data, offset);
+        offset += 4;
+        if (offset + symbolLength > data.length) return 'Unknown';
+        const rawSymbol = new TextDecoder('utf-8').decode(data.slice(offset, offset + symbolLength));
+        return rawSymbol.replace(/\0+$/, '').trim() || 'Unknown';
+      } catch (error) {
+        console.error('Error fetching token symbol:', error);
+        return 'Unknown';
+      }
+    }
 
-        // Show the loading screen with fade effect
-        function showLoadingScreen() {
-            const contentDiv = document.getElementById('content');
-            contentDiv.classList.add('loading'); // Start fading out content
+    // Fetch token data and top holders from the blockchain
+    async function fetchTokenData(tokenMintAddress) {
+      try {
+        const tokenMintPubkey = new PublicKey(tokenMintAddress);
+        const mintInfo = await connection.getParsedAccountInfo(tokenMintPubkey);
+        if (!mintInfo.value?.data?.parsed?.info)
+          throw new Error('Failed to fetch valid mint info');
 
-            const visualizationDiv = document.getElementById('visualization');
-            let loadingScreen = document.getElementById('loading-screen');
-            if (!loadingScreen) {
-                loadingScreen = createLoadingScreen();
-                visualizationDiv.appendChild(loadingScreen);
-            }
-            const message = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
-            document.getElementById('loading-message').textContent = message;
-            loadingScreen.style.display = 'flex';
-            loadingScreen.classList.add('active'); // Start fading in loading screen
-        }
+        const decimals = mintInfo.value.data.parsed.info.decimals;
+        const totalSupply = parseFloat(mintInfo.value.data.parsed.info.supply) / Math.pow(10, decimals);
+        if (isNaN(totalSupply) || totalSupply <= 0)
+          throw new Error('Invalid total supply');
 
-        // Hide and remove the loading screen
-        function hideLoadingScreen() {
-            const loadingScreen = document.getElementById('loading-screen');
-            if (loadingScreen) {
-                loadingScreen.classList.remove('active'); // Start fading out loading screen
-                setTimeout(() => {
-                    loadingScreen.remove();
-                    document.getElementById('content').classList.remove('loading'); // Start fading in content
-                }, 500); // Wait for fade-out of loading screen
-            }
-        }
+        const accounts = await connection.getParsedProgramAccounts(
+          TOKEN_PROGRAM_ID,
+          {
+            filters: [
+              { dataSize: 165 },
+              { memcmp: { offset: 0, bytes: tokenMintPubkey.toBase58() } },
+            ],
+          }
+        );
 
-        function copyAddress() {
-            const address = document.getElementById('modal-wallet-address').textContent;
-            navigator.clipboard.writeText(address).then(() => {
-                alert('Address copied to clipboard');
-            }).catch(err => {
-                console.error('Failed to copy address:', err);
-            });
-        }
-
-        async function fetchTokenSymbol(tokenMintAddress) {
-            try {
-                const metadataProgramId = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
-                const [metadataAccount] = await PublicKey.findProgramAddress(
-                    [
-                        new TextEncoder().encode('metadata'),
-                        metadataProgramId.toBuffer(),
-                        new PublicKey(tokenMintAddress).toBuffer()
-                    ],
-                    metadataProgramId
-                );
-
-                const accountInfo = await connection.getAccountInfo(metadataAccount);
-                if (!accountInfo || !accountInfo.data) return 'Unknown';
-
-                const data = accountInfo.data;
-                function readUInt32LE(arr, offset) {
-                    return (arr[offset]) | (arr[offset + 1] << 8) | (arr[offset + 2] << 16) | (arr[offset + 3] << 24);
-                }
-
-                let offset = 0;
-                const key = data[offset];
-                offset += 1;
-                if (key !== 4) return 'Unknown';
-
-                offset += 32; // Skip update authority
-                offset += 32; // Skip mint address
-                const nameLength = readUInt32LE(data, offset);
-                offset += 4 + nameLength;
-                const symbolLength = readUInt32LE(data, offset);
-                offset += 4;
-
-                if (offset + symbolLength > data.length) return 'Unknown';
-
-                const rawSymbol = new TextDecoder('utf-8').decode(data.slice(offset, offset + symbolLength));
-                return rawSymbol.replace(/\0+$/, '').trim() || 'Unknown';
-            } catch (error) {
-                console.error('Error fetching token symbol:', error);
-                return 'Unknown';
-            }
-        }
-
-        async function fetchTokenData(tokenMintAddress) {
-            try {
-                const tokenMintPubkey = new PublicKey(tokenMintAddress);
-                const mintInfo = await connection.getParsedAccountInfo(tokenMintPubkey);
-                if (!mintInfo.value?.data?.parsed?.info) throw new Error('Failed to fetch valid mint info');
-
-                const decimals = mintInfo.value.data.parsed.info.decimals;
-                const totalSupply = parseFloat(mintInfo.value.data.parsed.info.supply) / Math.pow(10, decimals);
-                if (isNaN(totalSupply) || totalSupply <= 0) throw new Error('Invalid total supply');
-
-                const accounts = await connection.getParsedProgramAccounts(
-                    TOKEN_PROGRAM_ID,
-                    {
-                        filters: [
-                            { dataSize: 165 },
-                            { memcmp: { offset: 0, bytes: tokenMintPubkey.toBase58() } },
-                        ],
-                    }
-                );
-
-                const nodes = accounts.map(account => {
-                    const parsedInfo = account.account.data.parsed.info;
-                    const holdings = parseFloat(parsedInfo.tokenAmount.uiAmountString);
-                    const percentage = (holdings / totalSupply) * 100;
-                    return {
-                        id: parsedInfo.owner,
-                        holdings,
-                        percentage,
-                        linkedWallets: [],
-                        isLP: parsedInfo.owner === RAYDIUM_ADDRESS
-                    };
-                }).filter(node => node.holdings > 0);
-
-                const topHolders = nodes.sort((a, b) => b.holdings - a.holdings).slice(0, 100);
-                await fetchTransferData(tokenMintAddress, topHolders);
-
-                const links = [];
-                topHolders.forEach(node => {
-                    node.linkedWallets.forEach(linkedId => {
-                        if (topHolders.some(n => n.id === linkedId)) {
-                            links.push({ source: node.id, target: linkedId });
-                        }
-                    });
-                });
-
-                return { nodes: topHolders, links };
-            } catch (error) {
-                console.error('Error fetching token data:', error);
-                alert('Failed to fetch token data: ' + error.message);
-                return { nodes: [], links: [] };
-            }
-        }
-
-        async function fetchTransferData(tokenMintAddress, nodes) {
-            try {
-                const tokenMintPubkey = new PublicKey(tokenMintAddress);
-                const signatures = await connection.getSignaturesForAddress(tokenMintPubkey, { limit: 100 });
-                const walletSet = new Set(nodes.map(node => node.id));
-                const transferMap = new Map();
-
-                for (const sig of signatures) {
-                    const tx = await connection.getParsedTransaction(sig.signature, {
-                        commitment: 'confirmed',
-                        maxSupportedTransactionVersion: 0
-                    });
-                    if (!tx?.transaction?.message) continue;
-
-                    const instructions = tx.transaction.message.instructions;
-                    for (const instruction of instructions) {
-                        if (instruction.programId.toBase58() === TOKEN_PROGRAM_ID.toBase58() &&
-                            instruction.parsed?.type === 'transfer') {
-                            const { source, destination } = instruction.parsed.info;
-                            if (walletSet.has(source) && walletSet.has(destination)) {
-                                if (!transferMap.has(source)) transferMap.set(source, new Set());
-                                transferMap.get(source).add(destination);
-                                if (!transferMap.has(destination)) transferMap.set(destination, new Set());
-                                transferMap.get(destination).add(source);
-                            }
-                        }
-                    }
-                }
-
-                nodes.forEach(node => {
-                    if (transferMap.has(node.id)) {
-                        node.linkedWallets = Array.from(transferMap.get(node.id));
-                    }
-                });
-            } catch (error) {
-                console.error('Error fetching transfer data:', error);
-            }
-        }
-
-        function initVisualization() {
-            const contentDiv = document.getElementById('content');
-            contentDiv.innerHTML = ''; // Clear previous content
-
-            if (hasLoadedOnce && currentDataset.nodes.length === 0) {
-                contentDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">No data available</p>';
-                return;
-            } else if (!hasLoadedOnce) {
-                contentDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>';
-                return;
-            }
-
-            width = contentDiv.clientWidth;
-            height = contentDiv.clientHeight;
-
-            currentDataset.nodes.forEach((node, i) => {
-                if (i === 0) {
-                    node.x = width / 2;
-                    node.y = height / 2;
-                    node.fx = width / 2;
-                    node.fy = height / 2;
-                } else {
-                    const radius = i * 3;
-                    const angle = Math.random() * 2 * Math.PI;
-                    node.x = width / 2 + radius * Math.cos(angle);
-                    node.y = height / 2 + radius * Math.sin(angle);
-                }
-            });
-
-            svg = d3.select('#content')
-                .append('svg')
-                .attr('width', width)
-                .attr('height', height);
-
-            const defs = svg.append('defs');
-            const gradient = defs.append('radialGradient')
-                .attr('id', 'sphere-gradient')
-                .attr('cx', '50%')
-                .attr('cy', '50%')
-                .attr('r', '50%')
-                .attr('fx', '30%')
-                .attr('fy', '30%');
-            gradient.append('stop').attr('offset', '0%').attr('stop-color', 'var(--accent-hover)');
-            gradient.append('stop').attr('offset', '100%').attr('stop-color', 'var(--accent-color)');
-
-            const linkedGradient = defs.append('radialGradient')
-                .attr('id', 'linked-sphere-gradient')
-                .attr('cx', '50%')
-                .attr('cy', '50%')
-                .attr('r', '50%')
-                .attr('fx', '30%')
-                .attr('fy', '30%');
-            linkedGradient.append('stop').attr('offset', '0%').attr('stop-color', '#FFD700');
-            linkedGradient.append('stop').attr('offset', '100%').attr('stop-color', 'var(--secondary-accent)');
-
-            zoom = d3.zoom()
-                .scaleExtent([0.1, 10])
-                .on('zoom', (event) => {
-                    g.attr('transform', event.transform);
-                });
-            svg.call(zoom);
-
-            const g = svg.append('g');
-
-            const links = g.append('g')
-                .attr('class', 'links')
-                .selectAll('line')
-                .data(currentDataset.links)
-                .enter()
-                .append('line')
-                .attr('stroke-width', 1);
-
-            const nodes = g.append('g')
-                .attr('class', 'nodes')
-                .selectAll('circle')
-                .data(currentDataset.nodes)
-                .enter()
-                .append('circle')
-                .attr('r', d => Math.max(5, 20 * Math.sqrt(d.percentage)))
-                .attr('fill', d => d.isLP ? 'var(--lp-color)' : (d.linkedWallets.length > 0 ? 'url(#linked-sphere-gradient)' : 'url(#sphere-gradient)'))
-                .classed('lp', d => d.isLP)
-                .on('click', nodeClicked)
-                .on('mouseover', (event, d) => {
-                    showTooltip(event, d);
-                    links.filter(link => link.source.id === d.id || link.target.id === d.id)
-                        .attr('stroke-width', 2);
-                })
-                .on('mouseout', (event, d) => {
-                    hideTooltip();
-                    links.attr('stroke-width', 1);
-                })
-                .on('mousemove', moveTooltip);
-
-            simulation = d3.forceSimulation(currentDataset.nodes)
-                .force('link', d3.forceLink(currentDataset.links).id(d => d.id).distance(50))
-                .force('charge', d3.forceManyBody().strength(-200))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .on('tick', () => {
-                    links.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
-                        .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
-                    nodes.attr('cx', d => d.x).attr('cy', d => d.y);
-                });
-
-            updateStatistics();
-        }
-
-        function zoomToNode(node) {
-            const scale = 2;
-            const translate = [width / 2 - node.x * scale, height / 2 - node.y * scale];
-            svg.transition()
-                .duration(750)
-                .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
-        }
-
-        function updateStatistics() {
-            const walletCount = currentDataset.nodes.length;
-            const totalHoldings = currentDataset.nodes.reduce((sum, node) => sum + node.holdings, 0);
-            document.getElementById('wallet-count').textContent = `Wallets: ${walletCount}`;
-            document.getElementById('total-holdings').textContent = `Total Holdings: ${totalHoldings.toFixed(2)}`;
-        }
-
-        function nodeClicked(event, d) {
-            d3.selectAll('.nodes circle').classed('selected', false);
-            d3.select(event.currentTarget).classed('selected', true);
-            selectedNode = d;
-
-            const solscanUrl = `https://solscan.io/account/${d.id}`;
-            const addressSpan = document.getElementById('modal-wallet-address');
-            addressSpan.textContent = d.id;
-            document.getElementById('solscan-link').href = solscanUrl;
-            document.getElementById('modal-wallet-holdings').textContent = `${d.holdings.toFixed(2)} $${currentSymbol}`;
-            document.getElementById('modal-wallet-percentage').textContent = `${d.percentage.toFixed(2)}%`;
-            document.getElementById('wallet-modal').classList.add('active');
-
-            zoomToNode(d);
-        }
-
-        function showTooltip(event, d) {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.innerHTML = `<div>Address: ${d.id}</div><div>Holdings: ${d.holdings.toFixed(2)} (${d.percentage.toFixed(2)}%)</div>`;
-            if (d.isLP) tooltip.innerHTML += `<div>Liquidity Provider</div>`;
-            tooltip.style.opacity = 1;
-            moveTooltip(event);
-        }
-
-        function hideTooltip() {
-            document.getElementById('tooltip').style.opacity = 0;
-        }
-
-        function moveTooltip(event) {
-            const tooltip = document.getElementById('tooltip');
-            tooltip.style.left = `${event.pageX + 15}px`;
-            tooltip.style.top = `${event.pageY - 25}px`;
-        }
-
-        window.addEventListener('load', function () {
-            const loadTokenButton = document.getElementById('load-token');
-            const searchWalletButton = document.getElementById('search-wallet');
-            const closeModalButton = document.getElementById('close-modal');
-
-            if (loadTokenButton) {
-                loadTokenButton.addEventListener('click', async () => {
-                    const tokenInput = document.getElementById('token-input').value.trim();
-                    if (!tokenInput) {
-                        alert('Please enter a token address.');
-                        return;
-                    }
-
-                    const originalLoadText = loadTokenButton.textContent;
-                    loadTokenButton.textContent = 'Loading...';
-                    loadTokenButton.disabled = true;
-                    showLoadingScreen();
-
-                    try {
-                        currentSymbol = await fetchTokenSymbol(tokenInput);
-                        document.getElementById('title').textContent = `Solana Sphere View for $${currentSymbol}`;
-                        currentDataset = await fetchTokenData(tokenInput);
-                        hasLoadedOnce = true;
-                        initVisualization();
-                    } catch (error) {
-                        console.error('Error loading token data:', error);
-                        alert('Failed to load token data.');
-                    } finally {
-                        hideLoadingScreen();
-                        loadTokenButton.textContent = originalLoadText;
-                        loadTokenButton.disabled = false;
-                    }
-                });
-            }
-
-            if (searchWalletButton) {
-                searchWalletButton.addEventListener('click', () => {
-                    const searchValue = document.getElementById('search-input').value.trim();
-                    const nodes = d3.selectAll('.nodes circle');
-                    nodes.classed('selected', false);
-
-                    const match = currentDataset.nodes.find(node => node.id === searchValue);
-                    if (match) {
-                        nodes.filter(d => d.id === searchValue).classed('selected', true);
-                        const solscanUrl = `https://solscan.io/account/${match.id}`;
-                        document.getElementById('modal-wallet-address').textContent = match.id;
-                        document.getElementById('solscan-link').href = solscanUrl;
-                        document.getElementById('modal-wallet-holdings').textContent = `${match.holdings.toFixed(2)} $${currentSymbol}`;
-                        document.getElementById('modal-wallet-percentage').textContent = `${match.percentage.toFixed(2)}%`;
-                        document.getElementById('wallet-modal').classList.add('active');
-                        selectedNode = match;
-                        zoomToNode(match);
-                    } else {
-                        alert(`Wallet "${searchValue}" not found in current dataset.`);
-                        document.getElementById('wallet-modal').classList.remove('active');
-                        selectedNode = null;
-                    }
-                });
-            }
-
-            if (closeModalButton) {
-                closeModalButton.addEventListener('click', () => {
-                    document.getElementById('wallet-modal').classList.remove('active');
-                    d3.selectAll('.nodes circle').classed('selected', false);
-                    selectedNode = null;
-                });
-            }
-
-            initVisualization();
+        const holderMap = new Map();
+        accounts.forEach(account => {
+          const parsedInfo = account.account.data.parsed.info;
+          const owner = parsedInfo.owner;
+          const holdings = parseFloat(parsedInfo.tokenAmount.uiAmountString);
+          if (holderMap.has(owner)) {
+            holderMap.get(owner).holdings += holdings;
+          } else {
+            holderMap.set(owner, { id: owner, holdings, percentage: 0, isLP: owner === RAYDIUM_ADDRESS });
+          }
         });
 
-        window.addEventListener('resize', initVisualization);
-    </script>
-</body>
+        const nodes = Array.from(holderMap.values());
+        nodes.forEach(node => {
+          node.percentage = (node.holdings / totalSupply) * 100;
+          // Initialize connection flag to false
+          node.hasConnection = false;
+        });
+        const topHolders = nodes.filter(node => node.holdings > 0)
+                                .sort((a, b) => b.holdings - a.holdings)
+                                .slice(0, 100);
 
+        console.log(`Top holders: ${topHolders.length}`, topHolders.map(h => h.id));
+        const solTransfers = await fetchSolTransfers(topHolders);
+        // Mark nodes that have at least one connection
+        solTransfers.forEach(transfer => {
+          const src = topHolders.find(n => n.id === transfer.source);
+          const tgt = topHolders.find(n => n.id === transfer.target);
+          if (src) src.hasConnection = true;
+          if (tgt) tgt.hasConnection = true;
+        });
+        return { nodes: topHolders, solTransfers };
+      } catch (error) {
+        console.error('Error fetching token data:', error);
+        alert('Failed to fetch token data: ' + error.message);
+        return { nodes: [], solTransfers: [] };
+      }
+    }
+
+    // Fetch SOL transfers between top holders
+    async function fetchSolTransfers(nodes) {
+      const holderSet = new Set(nodes.map(node => node.id));
+      const solTransfers = [];
+      // Increase batches and limit per batch to search further back in history
+      const maxBatches = 10;
+      const limitPerBatch = 100;
+      let completed = 0;
+
+      await Promise.all(nodes.map(async (node) => {
+        try {
+          let before = null;
+          for (let batch = 0; batch < maxBatches; batch++) {
+            const walletPubkey = new PublicKey(node.id);
+            const signatures = await connection.getSignaturesForAddress(walletPubkey, { limit: limitPerBatch, before });
+            if (signatures.length === 0) break;
+            for (const sig of signatures) {
+              const tx = await connection.getParsedTransaction(sig.signature, {
+                commitment: 'confirmed',
+                maxSupportedTransactionVersion: 0
+              });
+              if (!tx?.transaction?.message) continue;
+              const instructions = tx.transaction.message.instructions;
+              for (const instruction of instructions) {
+                // Check for native SOL transfer instructions from the System Program
+                if (instruction.programId.toBase58() === SystemProgram.programId.toBase58() &&
+                    instruction.parsed?.type === 'transfer') {
+                  const { source, destination, lamports } = instruction.parsed.info;
+                  // Only include if both source and destination are in the top holders set and are not the same
+                  if (holderSet.has(source) && holderSet.has(destination) && source !== destination) {
+                    solTransfers.push({ source, target: destination, amount: lamports / 1e9 });
+                  }
+                }
+              }
+            }
+            before = signatures[signatures.length - 1].signature;
+          }
+        } catch (error) {
+          console.error(`Error fetching SOL transfers for ${node.id}:`, error);
+        } finally {
+          completed++;
+          const progress = Math.round((completed / nodes.length) * 100);
+          document.getElementById('loading-message').textContent = `Fetching SOL transfers: ${progress}%`;
+        }
+      }));
+
+      console.log(`Found ${solTransfers.length} SOL transfers between top holders.`);
+      // Remove duplicates based on source->target key
+      const uniqueTransfers = [];
+      const transferSet = new Set();
+      for (const transfer of solTransfers) {
+        const key = `${transfer.source}->${transfer.target}`;
+        if (!transferSet.has(key)) {
+          transferSet.add(key);
+          uniqueTransfers.push(transfer);
+        }
+      }
+      return uniqueTransfers;
+    }
+
+    // Initialise the visualisation
+    function initVisualization() {
+      const contentDiv = document.getElementById('content');
+      contentDiv.innerHTML = '';
+      if (hasLoadedOnce && currentDataset.nodes.length === 0) {
+        contentDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">No data available</p>';
+        return;
+      } else if (!hasLoadedOnce) {
+        contentDiv.innerHTML = '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>';
+        return;
+      }
+      width = contentDiv.clientWidth;
+      height = contentDiv.clientHeight;
+
+      // Set initial node positions
+      currentDataset.nodes.forEach((node, i) => {
+        if (i === 0) {
+          node.x = width / 2;
+          node.y = height / 2;
+          node.fx = width / 2;
+          node.fy = height / 2;
+        } else {
+          const radius = i * 3;
+          const angle = Math.random() * 2 * Math.PI;
+          node.x = width / 2 + radius * Math.cos(angle);
+          node.y = height / 2 + radius * Math.sin(angle);
+        }
+      });
+
+      // Create SVG element
+      svg = d3.select('#content')
+              .append('svg')
+              .attr('width', width)
+              .attr('height', height);
+
+      const defs = svg.append('defs');
+      defs.append('marker')
+          .attr('id', 'arrowhead')
+          .attr('viewBox', '-0 -5 10 10')
+          .attr('refX', 8)
+          .attr('refY', 0)
+          .attr('orient', 'auto')
+          .attr('markerWidth', 6)
+          .attr('markerHeight', 6)
+          .append('path')
+          .attr('d', 'M 0,-5 L 10 ,0 L 0,5')
+          .attr('fill', 'var(--accent-color)');
+
+      const gradient = defs.append('radialGradient')
+                           .attr('id', 'sphere-gradient')
+                           .attr('cx', '50%')
+                           .attr('cy', '50%')
+                           .attr('r', '50%')
+                           .attr('fx', '30%')
+                           .attr('fy', '30%');
+      gradient.append('stop').attr('offset', '0%').attr('stop-color', 'var(--accent-hover)');
+      gradient.append('stop').attr('offset', '100%').attr('stop-color', 'var(--accent-color)');
+
+      // Setup zoom and pan
+      zoom = d3.zoom()
+               .scaleExtent([0.1, 10])
+               .on('zoom', (event) => { g.attr('transform', event.transform); });
+      svg.call(zoom);
+
+      // Create container group
+      const g = svg.append('g');
+
+      // Create link elements for SOL transfers
+      const linkGroup = g.append('g').attr('class', 'sol-transfers');
+      const solTransferLinks = linkGroup.selectAll('line')
+        .data(currentDataset.solTransfers)
+        .enter()
+        .append('line')
+        .attr('marker-end', 'url(#arrowhead)');
+
+      // Append tooltip to each link
+      solTransferLinks.append('title')
+        .text(d => `SOL Transfer: ${d.amount.toFixed(2)} SOL`);
+
+      // Create node elements
+      const nodes = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('circle')
+        .data(currentDataset.nodes)
+        .enter()
+        .append('circle')
+        .attr('r', d => Math.max(5, 20 * Math.sqrt(d.percentage)))
+        .attr('fill', d => {
+          if(d.isLP) {
+            return 'var(--lp-color)';
+          } else if(d.hasConnection) {
+            // Use a completely different colour for nodes that have at least one connection
+            return 'var(--connection-color)';
+          } else {
+            return 'url(#sphere-gradient)';
+          }
+        })
+        .classed('lp', d => d.isLP)
+        .on('click', nodeClicked)
+        .on('mouseover', (event, d) => {
+          showTooltip(event, d);
+          // Highlight connected links using the connection colour for contrast
+          solTransferLinks.filter(link => link.source.id === d.id || link.target.id === d.id)
+            .attr('stroke', 'var(--connection-color)')
+            .attr('stroke-width', 3);
+        })
+        .on('mouseout', (event, d) => {
+          hideTooltip();
+          // Revert links to original accent colour and stroke width
+          solTransferLinks.attr('stroke', 'var(--accent-color)')
+            .attr('stroke-width', 2);
+        })
+        .on('mousemove', moveTooltip);
+
+      // Create a force link using a dedicated variable
+      const linkForce = d3.forceLink(currentDataset.solTransfers)
+                          .id(d => d.id)
+                          .distance(150);
+
+      // Initialise force simulation (nodes and links)
+      simulation = d3.forceSimulation(currentDataset.nodes)
+        .force('charge', d3.forceManyBody().strength(-200))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('link', linkForce)
+        .on('tick', ticked);
+
+      // Ensure forceLink uses our transfer data
+      simulation.force('link').links(currentDataset.solTransfers);
+
+      // Tick function to update node and link positions
+      function ticked() {
+        solTransferLinks
+          .attr('x1', d => d.source.x)
+          .attr('y1', d => d.source.y)
+          .attr('x2', d => {
+            const dx = d.target.x - d.source.x;
+            const dy = d.target.y - d.source.y;
+            const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+            const targetRadius = Math.max(5, 20 * Math.sqrt(d.target.percentage));
+            return d.target.x - (dx / distance) * targetRadius;
+          })
+          .attr('y2', d => {
+            const dx = d.target.x - d.source.x;
+            const dy = d.target.y - d.source.y;
+            const distance = Math.sqrt(dx * dx + dy * dy) || 1;
+            const targetRadius = Math.max(5, 20 * Math.sqrt(d.target.percentage));
+            return d.target.y - (dy / distance) * targetRadius;
+          });
+        nodes.attr('cx', d => d.x).attr('cy', d => d.y);
+      }
+      updateStatistics();
+    }
+
+    // Zoom to a specific node
+    function zoomToNode(node) {
+      const scale = 2;
+      const translate = [width / 2 - node.x * scale, height / 2 - node.y * scale];
+      svg.transition()
+         .duration(750)
+         .call(zoom.transform, d3.zoomIdentity.translate(translate[0], translate[1]).scale(scale));
+    }
+
+    // Update sidebar statistics
+    function updateStatistics() {
+      document.getElementById('wallet-count').textContent = `Wallets: ${currentDataset.nodes.length}`;
+      document.getElementById('total-transfers').textContent = `Total SOL Transfers: ${currentDataset.solTransfers.length}`;
+    }
+
+    // Handler for node click events
+    function nodeClicked(event, d) {
+      d3.selectAll('.nodes circle').classed('selected', false);
+      d3.select(event.currentTarget).classed('selected', true);
+      selectedNode = d;
+      const solscanUrl = `https://solscan.io/account/${d.id}`;
+      document.getElementById('modal-wallet-address').textContent = d.id;
+      document.getElementById('solscan-link').href = solscanUrl;
+      document.getElementById('modal-wallet-holdings').textContent = `${d.holdings.toFixed(2)} $${currentSymbol}`;
+      document.getElementById('modal-wallet-percentage').textContent = `${d.percentage.toFixed(2)}%`;
+      document.getElementById('wallet-modal').classList.add('active');
+      zoomToNode(d);
+    }
+
+    // Show tooltip with wallet info
+    function showTooltip(event, d) {
+      const tooltip = document.getElementById('tooltip');
+      tooltip.innerHTML = `<div>Address: ${d.id}</div><div>Holdings: ${d.holdings.toFixed(2)} (${d.percentage.toFixed(2)}%)</div>`;
+      if (d.isLP) tooltip.innerHTML += `<div>Liquidity Provider</div>`;
+      tooltip.style.opacity = 1;
+      moveTooltip(event);
+    }
+
+    // Hide tooltip
+    function hideTooltip() {
+      document.getElementById('tooltip').style.opacity = 0;
+    }
+
+    // Move tooltip with mouse events
+    function moveTooltip(event) {
+      const tooltip = document.getElementById('tooltip');
+      tooltip.style.left = `${event.pageX + 15}px`;
+      tooltip.style.top = `${event.pageY - 25}px`;
+    }
+
+    // Set up event listeners for token loading, wallet search and modal closing
+    window.addEventListener('load', function () {
+      const loadTokenButton = document.getElementById('load-token');
+      const searchWalletButton = document.getElementById('search-wallet');
+      const closeModalButton = document.getElementById('close-modal');
+
+      if (loadTokenButton) {
+        loadTokenButton.addEventListener('click', async () => {
+          const tokenInput = document.getElementById('token-input').value.trim();
+          if (!tokenInput) {
+            alert('Please enter a token address.');
+            return;
+          }
+          const originalLoadText = loadTokenButton.textContent;
+          loadTokenButton.textContent = 'Loading...';
+          loadTokenButton.disabled = true;
+          showLoadingScreen();
+          try {
+            console.log('Fetching token symbol...');
+            currentSymbol = await fetchTokenSymbol(tokenInput);
+            document.getElementById('title').textContent = `Solana Sphere View for $${currentSymbol}`;
+            console.log('Fetching token data...');
+            currentDataset = await fetchTokenData(tokenInput);
+            console.log('Data fetched:', currentDataset);
+            hasLoadedOnce = true;
+            initVisualization();
+          } catch (error) {
+            console.error('Error loading token data:', error);
+            alert('Failed to load token data.');
+          } finally {
+            hideLoadingScreen();
+            loadTokenButton.textContent = originalLoadText;
+            loadTokenButton.disabled = false;
+          }
+        });
+      }
+
+      if (searchWalletButton) {
+        searchWalletButton.addEventListener('click', () => {
+          const searchValue = document.getElementById('search-input').value.trim();
+          const nodes = d3.selectAll('.nodes circle');
+          nodes.classed('selected', false);
+          const match = currentDataset.nodes.find(node => node.id === searchValue);
+          if (match) {
+            nodes.filter(d => d.id === searchValue).classed('selected', true);
+            const solscanUrl = `https://solscan.io/account/${match.id}`;
+            document.getElementById('modal-wallet-address').textContent = match.id;
+            document.getElementById('solscan-link').href = solscanUrl;
+            document.getElementById('modal-wallet-holdings').textContent = `${match.holdings.toFixed(2)} $${currentSymbol}`;
+            document.getElementById('modal-wallet-percentage').textContent = `${match.percentage.toFixed(2)}%`;
+            document.getElementById('wallet-modal').classList.add('active');
+            selectedNode = match;
+            zoomToNode(match);
+          } else {
+            alert(`Wallet "${searchValue}" not found in current dataset.`);
+            document.getElementById('wallet-modal').classList.remove('active');
+            selectedNode = null;
+          }
+        });
+      }
+
+      if (closeModalButton) {
+        closeModalButton.addEventListener('click', () => {
+          document.getElementById('wallet-modal').classList.remove('active');
+          d3.selectAll('.nodes circle').classed('selected', false);
+          selectedNode = null;
+        });
+      }
+      initVisualization();
+    });
+
+    window.addEventListener('resize', initVisualization);
+  </script>
+</body>
 </html>
