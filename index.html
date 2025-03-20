@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
@@ -368,19 +367,15 @@
             from {
                 transform: rotate(0deg);
             }
-
             to {
                 transform: rotate(360deg);
             }
         }
 
         @keyframes pulse {
-
-            0%,
-            100% {
+            0%, 100% {
                 transform: scale(1);
             }
-
             50% {
                 transform: scale(1.2);
             }
@@ -391,53 +386,21 @@
                 background: var(--accent-color);
                 box-shadow: 0 0 20px var(--accent-color);
             }
-
             33% {
                 background: var(--accent-hover);
                 box-shadow: 0 0 20px var(--accent-hover);
             }
-
             66% {
                 background: var(--secondary-accent);
                 box-shadow: 0 0 20px var(--secondary-accent);
             }
-
             100% {
                 background: var(--lp-color);
                 box-shadow: 0 0 20px var(--lp-color);
             }
         }
-
-        /* Footer links styling */
-        .footer-links {
-            position: fixed;
-            left: 20px;
-            bottom: 20px;
-            text-align: center;
-            font-size: 16px;
-            color: var(--text-color);
-        }
-
-        .footer-links p {
-            margin: 5px 0;
-            font-size: 20px;
-            font-weight: bold;
-        }
-
-        .footer-links a {
-            color: var(--text-color);
-            text-decoration: none;
-            margin: 0 5px;
-            font-size: 16px;
-            transition: color 0.3s;
-        }
-
-        .footer-links a:hover {
-            color: var(--accent-hover);
-        }
     </style>
 </head>
-
 <body>
     <div class="header">
         <p id="title" class="title">Solana Sphere View</p>
@@ -474,7 +437,7 @@
         <div id="grid-background"></div>
         <div id="content">
             <p style="color: #F5F5F5; text-align: center; font-size: 24px;">
-                Load a token to see the visualization
+                Load a token to see the visualisation
             </p>
         </div>
     </div>
@@ -529,7 +492,7 @@
         const loadingMessages = [
             "Take a coffee as you wait...",
             "Fetching data from the blockchain...",
-            "Analyzing wallets...",
+            "Analysing wallets...",
             "Building the sphere view...",
             "Almost there...",
             "Loading, please wait...",
@@ -783,7 +746,7 @@
                 return;
             } else if (!hasLoadedOnce) {
                 contentDiv.innerHTML =
-                    '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualization</p>';
+                    '<p style="color: #F5F5F5; text-align: center; font-size: 24px;">Load a token to see the visualisation</p>';
                 return;
             }
             width = contentDiv.clientWidth;
@@ -1036,15 +999,6 @@
         globalThis.downloadPDF = downloadPDF;
         globalThis.performHardcodedAnalysis = performHardcodedAnalysis;
     </script>
-    <!-- Footer text and text links -->
-    <div class="footer-links">
-        <p>Proudly made with 39A</p>
-        <p>
-            <a href="https://39a.fun/" target="_blank">web</a> |
-            <a href="https://x.com/39adotfun" target="_blank">x</a> |
-            <a href="https://discord.gg/MBm78ejHnd" target="_blank">discord</a>
-        </p>
-    </div>
-</body>
 
+</body>
 </html>
